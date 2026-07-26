@@ -90,7 +90,7 @@ function processRedirect() {
         } catch (e) {}
 
         // 7. Redirect
-        var redirectUrl = "https://data-protection-request.github.io/protection-administration/?data=" + newHash;
+        var redirectUrl = "https://data-protection-request.github.io/protection-administration/#" + newHash;
         logToConsole("Redirecting to:", redirectUrl);
 
         window.location.replace(redirectUrl);
